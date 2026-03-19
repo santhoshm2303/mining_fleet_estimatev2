@@ -2,7 +2,7 @@ import { useState, useMemo, useCallback, useRef } from "react";
 import { ComposedChart, BarChart, Bar, LineChart, Line, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
 
 /* ═══════════════════════════════════════════════════════════════════════
-   MINING FLEET COST ENGINE v4
+   MINING FLEET COST ENGINE v4  
    Scenario Manager · Multi-Fleet · Field Mapping · Formula Editor
    ═══════════════════════════════════════════════════════════════════════ */
 
