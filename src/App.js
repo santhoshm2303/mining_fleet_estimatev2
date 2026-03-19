@@ -10,7 +10,7 @@ var mClr=["#1d4ed8","#0d7a5f","#c93131","#7c3aed","#be185d","#0e7490"];
 
 let _id = 100; const uid = () => "m" + (++_id);
 
-// ─── 2. FORMATTING HELPERS (CRITICAL: DEFINED BEFORE USE) ──────────────
+// ─── 2. FORMATTING HELPERS ──────────────────────────────────────────────
 const fmt = (v,d=2) => { if(v===""||v==null||isNaN(v)) return "—"; return Number(v).toLocaleString("en-AU",{minimumFractionDigits:d,maximumFractionDigits:d}); };
 const fmtInt = v => fmt(v,0);
 const fmtC2 = v => { if(v===""||v==null||isNaN(v)) return "—"; return "$"+Number(v).toLocaleString("en-AU",{minimumFractionDigits:2,maximumFractionDigits:2}); };
@@ -160,6 +160,7 @@ const defaultFormulas = () => [
 
 // ─── 5. UI COMPONENTS ──────────────────────────────────────────────────
 const ST=({children,icon})=>(<div style={{display:"flex",alignItems:"center",gap:10,padding:"14px 0 10px",marginTop:20,borderBottom:`2px solid ${P.pri}`,marginBottom:14}}><span style={{fontSize:18}}>{icon}</span><span style={{color:P.pri,fontWeight:700,fontSize:15,fontFamily:ff}}>{children}</span></div>);
+const ChartToggles=({series,hidden,onToggle})=>(<div style={{display:"flex",gap:6,flexWrap:"wrap",padding:"8px 16px 4px"}}>{series.map(function(s){var vis=!hidden[s.key];return(<button key={s.key} onClick={function(){onToggle(s.key)}} style={{padding:"3px 10px",borderRadius:12,border:"1.5px solid "+(vis?s.color:P.bd),background:vis?s.color+"18":"transparent",color:vis?s.color:P.txD,fontFamily:ff,fontSize:10,fontWeight:600,cursor:"pointer",opacity:vis?1:0.4}}>{vis?"●":"○"} {s.label}</button>)})}</div>);
 const Btn=({children,onClick,color=P.pri,small,solid})=>(<button onClick={onClick} style={{padding:small?"5px 12px":"8px 20px",background:solid?color:"transparent",border:`1.5px solid ${color}`,borderRadius:7,color:solid?"#fff":color,fontFamily:ff,fontSize:12,cursor:"pointer",fontWeight:600}}>{children}</button>);
 const cardS={background:P.card,borderRadius:10,border:`1px solid ${P.bd}`,boxShadow:"0 1px 4px rgba(0,0,0,0.05)"};
 const selS={padding:"6px 12px",background:P.input,border:`1px solid ${P.bd}`,borderRadius:6,color:P.tx,fontFamily:ff,fontSize:12};
@@ -183,34 +184,88 @@ export default function App(){
   const [fleets,setFleets]=useState(()=>[mkFleet("Fleet 1",0,0),mkFleet("Fleet 2",1,1)]);
   const [scenarios,setScenarios]=useState(()=>[mkScenario("Scenario ST"),mkScenario("Scenario LT")]);
   const [activeScnIdx,setActiveScnIdx]=useState(0);
+  const [formulaSearch,setFormulaSearch]=useState("");
+  const [editingFormula,setEditingFormula]=useState(null);
+  const [editText,setEditText]=useState("");
+  const [collSec,setCollSec]=useState({});
+  const [collGrp,setCollGrp]=useState({});
+  const [testPeriodIdx,setTestPeriodIdx]=useState(0);
+  const [testFleetIdx,setTestFleetIdx]=useState(0);
+  const [hiddenSeries,setHiddenSeries]=useState({});
   const fileRef=useRef();
 
+  const togSec=(s)=>setCollSec(p=>{const n={...p};n[s]=!n[s];return n});
+  const togGrp=(g)=>setCollGrp(p=>{const n={...p};n[g]=!n[g];return n});
+  const togSeries=(k)=>setHiddenSeries(p=>{const n={...p};n[k]=!n[k];return n});
+  const isVis=(k)=>!hiddenSeries[k];
+
   const scn=scenarios[activeScnIdx]||scenarios[0];
+  const updScn=(fn)=>setScenarios(prev=>{const n=[...prev];n[activeScnIdx]=fn({...n[activeScnIdx]});return n});
+
+  const handleUpload=useCallback(e=>{
+    const f=e.target.files[0];if(!f)return;
+    const rd=new FileReader();
+    rd.onload=ev=>{try{
+      const parsed=parseGenericCSV(ev.target.result);
+      if(!parsed||parsed.np<1){updScn(s=>({...s,csvData:null,csvRawLabels:[]}));return}
+      updScn(s=>({...s,csvData:parsed,csvRawLabels:parsed.labels}));
+    }catch(err){console.error(err)}};
+    rd.readAsText(f);
+  },[activeScnIdx]);
+
+  const getPd=useCallback((pi,fleet)=>{
+    const psIdx=scn.fleetPhysicalSets[fleet.id]||0;
+    const mapping=scn.fieldMappings[psIdx]||scn.fieldMappings[0];
+    if(!mapping) return null;
+    if(scn.csvData){
+      const r={period:pi+1,periodLabel:scn.csvData.gs("Period",pi)||`P${pi+1}`,days:scn.csvData.gv("Days",pi)||91};
+      r.hours=scn.csvData.gv("Hours",pi)||r.days*24;
+      for(const pf of PHYS_FIELDS)r[pf.key]=mapping.fields[pf.key]?scn.csvData.gv(mapping.fields[pf.key],pi):0;
+      return r;
+    }
+    return scn.manualData[pi]||null;
+  },[scn]);
+
+  const numPeriods=scn.csvData?scn.csvData.np:scn.manualData.length;
   const activeFleets=fleets.filter(f=>scn.activeFleetIds.length===0||scn.activeFleetIds.includes(f.id));
 
   const results=useMemo(()=>{
     const all=[];
-    const currentPeriods = scn.csvData ? scn.csvData.np : scn.manualData.length;
-    for(let pi=0;pi< currentPeriods;pi++){
+    for(let pi=0;pi<numPeriods;pi++){
       for(const fleet of activeFleets){
-        const pd= (scn.csvData ? {periodLabel:scn.csvData.gs("Period",pi)||`P${pi+1}`, totalMined:scn.csvData.gv("Total Mined",pi)} : scn.manualData[pi]);
-        if(!pd)continue;
-        const ti=Math.min(fleet.truckIdx,trucks.length-1), di=Math.min(fleet.diggerIdx,diggers.length-1);
+        const pd=getPd(pi,fleet);if(!pd)continue;
+        const ti=Math.min(fleet.truckIdx,trucks.length-1),di=Math.min(fleet.diggerIdx,diggers.length-1);
         const res=calcWithFormulas({totalMined:(pd.totalMined||0)*scn.unitMul,oreMined:(pd.oreMined||0)*scn.unitMul,totalRampMined:(pd.totalRampMined||pd.totalMined||0)*scn.unitMul,avgLoadedTravelTime:pd.avgLoadedTravelTime||0,avgUnloadedTravelTime:pd.avgUnloadedTravelTime||0,avgNetPower:pd.avgNetPower||0,avgTkphDelay:pd.avgTkphDelay||0,schedPeriod:scn.schedPeriod,calendarDays:pd.days||91,calendarHours:pd.hours||2184,truck:trucks[ti],digger:diggers[di],other:otherA,fleet:fleet},formulas);
-        all.push({pi,periodLabel:pd.periodLabel||`P${pi+1}`,fleet,res,pd});
+        all.push({pi,periodLabel:pd.periodLabel||`P${pi+1}`,fleet,fleetName:fleet.name,truckName:trucks[ti]?.truckName,diggerName:diggers[di]?.diggerName,equipKey:`${fleet.truckIdx}-${fleet.diggerIdx}`,res,pd});
       }
     }
     return all;
-  }, [activeFleets, trucks, diggers, otherA, formulas, scn]);
+  },[numPeriods,activeFleets,trucks,diggers,otherA,formulas,scn,getPd]);
+
+  const equipGroups=useMemo(()=>{
+    const g={};for(const r of results){if(!g[r.equipKey])g[r.equipKey]={key:r.equipKey,truckName:r.truckName,diggerName:r.diggerName,fleetNames:[],results:[]};if(!g[r.equipKey].fleetNames.includes(r.fleetName))g[r.equipKey].fleetNames.push(r.fleetName);g[r.equipKey].results.push(r)}
+    return Object.values(g);
+  },[results]);
 
   const totals=useMemo(()=>{const t={m:0,c:0};results.forEach(r=>{if(!r.res)return;t.m+=(r.pd?.totalMined||0)*scn.unitMul;t.c+=r.res.totCost||0});t.cpt=t.m>0?t.c/t.m:0;return t},[results,scn.unitMul]);
 
+  const testResult=useMemo(()=>{
+    const fleet=activeFleets[testFleetIdx]||activeFleets[0];if(!fleet)return null;
+    const pd=getPd(testPeriodIdx,fleet);if(!pd)return null;
+    const ti=Math.min(fleet.truckIdx,trucks.length-1),di=Math.min(fleet.diggerIdx,diggers.length-1);
+    return calcWithFormulas({totalMined:(pd.totalMined||0)*scn.unitMul,oreMined:(pd.oreMined||0)*scn.unitMul,totalRampMined:(pd.totalRampMined||pd.totalMined||0)*scn.unitMul,avgLoadedTravelTime:pd.avgLoadedTravelTime||0,avgUnloadedTravelTime:pd.avgUnloadedTravelTime||0,avgNetPower:pd.avgNetPower||0,avgTkphDelay:pd.avgTkphDelay||0,schedPeriod:scn.schedPeriod,calendarDays:pd.days||91,calendarHours:pd.hours||2184,truck:trucks[ti],digger:diggers[di],other:otherA,fleet:fleet},formulas);
+  },[testPeriodIdx,testFleetIdx,activeFleets,trucks,diggers,otherA,formulas,scn,getPd]);
+
   const updT=(i,f,v)=>setTrucks(p=>{const n=[...p];n[i]={...n[i],[f]:v};return n});
   const updD=(i,f,v)=>setDiggers(p=>{const n=[...p];n[i]={...n[i],[f]:v};return n});
+  const uO=(k,v)=>setOtherA(p=>({...p,[k]:v}));
+  const updFleet=(i,k,v)=>setFleets(p=>{const n=[...p];n[i]={...n[i],[k]:v};return n});
 
   const navGroups=[
-    {label:"Assumptions",items:[{id:"truck",label:"Trucks",icon:"🚛"},{id:"digger",label:"Diggers",icon:"⛏️"}]},
-    {label:"Setup",items:[{id:"scenarios",label:"Scenarios",icon:"📋"},{id:"schedule",label:"Schedule",icon:"📅"}]}
+    {label:"Assumptions",items:[{id:"other",label:"General",icon:"⚙️"},{id:"truck",label:"Trucks",icon:"🚛"},{id:"digger",label:"Diggers",icon:"⛏️"}]},
+    {label:"Setup",items:[{id:"formulas",label:"Formulas",icon:"🧮"},{id:"fleets",label:"Fleet Combos",icon:"🏗️"}]},
+    {label:"Scenario Manager",items:[{id:"scenarios",label:"Scenarios",icon:"📋"},{id:"schedule",label:"Schedule",icon:"📅"},{id:"results",label:"Results",icon:"📊"}]},
+    {label:"Comparison",items:[{id:"comparison",label:"Comparison",icon:"⚖️"}]}
   ];
   const activeGroup=navGroups.find(g=>g.items.some(i=>i.id===page))||navGroups[0];
 
@@ -220,7 +275,7 @@ export default function App(){
       <div style={{background:P.hdr,padding:"12px 32px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
         <div style={{display:"flex",alignItems:"center",gap:14}}>
           <div style={{width:36,height:36,borderRadius:9,background:"linear-gradient(135deg,#1d4ed8,#3b82f6)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:18}}>⛏️</div>
-          <div><h1 style={{margin:0,fontSize:17,fontWeight:700,color:P.hdrTx}}>Mining Fleet Cost Engine</h1></div>
+          <div><h1 style={{margin:0,fontSize:17,fontWeight:700,color:P.hdrTx}}>Mining Fleet Cost Engine</h1><p style={{margin:0,color:"#9ca3af",fontSize:11}}>Scenario Manager · Multi-Fleet · Field Mapping</p></div>
         </div>
         <div style={{display:"flex",gap:16,alignItems:"center"}}>
           <select value={activeScnIdx} onChange={e=>setActiveScnIdx(parseInt(e.target.value))} style={{padding:"6px 14px",background:"#1f2937",border:"1px solid #374151",borderRadius:6,color:"#60a5fa",fontFamily:ff,fontSize:13,fontWeight:700}}>
@@ -239,15 +294,68 @@ export default function App(){
       <div style={{display:"flex",padding:"0 32px",background:P.card,borderBottom:"1px solid "+P.bd,overflowX:"auto"}}>
         {activeGroup.items.map(n=>(<button key={n.id} onClick={()=>setPage(n.id)} style={{padding:"11px 20px",background:"transparent",border:"none",borderBottom:page===n.id?"3px solid "+P.pri:"3px solid transparent",color:page===n.id?P.pri:P.txD,fontFamily:ff,fontSize:12,fontWeight:page===n.id?700:500,cursor:"pointer",whiteSpace:"nowrap"}}><span style={{marginRight:6}}>{n.icon}</span>{n.label}</button>))}
       </div>
+
       <div style={{padding:"20px 32px 60px",maxWidth:1600,margin:"0 auto"}}>
+        {/* SCENARIOS PAGE */}
         {page==="scenarios"&&(<div>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}><ST icon="📋">Scenario Manager</ST><Btn onClick={()=>setScenarios(p=>[...p,mkScenario(`Scenario ${p.length+1}`)])} solid>+ New Scenario</Btn></div>
           <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill, minmax(340px, 1fr))",gap:16}}>{scenarios.map((s,si)=>(
               <div key={s.id} style={{...cardS,padding:20,border:si===activeScnIdx?`2px solid ${P.pri}`:`1px solid ${P.bd}`}}>
                 <input type="text" value={s.name} onChange={e=>setScenarios(p=>{const n=[...p];n[si]={...n[si],name:e.target.value};return n})} style={{padding:"6px 10px",background:P.input,border:`1px solid ${P.bd}`,borderRadius:6,color:P.pri,fontFamily:ff,fontSize:16,fontWeight:700,width:200}}/>
+                <div style={{fontSize:12,color:P.txM,marginTop:10}}>📅 {s.csvData?`${s.csvData.np} periods`:`${s.manualData.length} manual periods`}</div>
                 <div style={{display:"flex",gap:8,marginTop:12}}><Btn onClick={()=>setActiveScnIdx(si)} solid={si===activeScnIdx} color={si===activeScnIdx?P.pri:P.txD} small>{si===activeScnIdx?"Active":"Select"}</Btn></div>
               </div>))}</div>
         </div>)}
+
+        {/* RESULTS PAGE */}
+        {page==="results"&&(<div>
+          <ST icon="📊">Results — {scn.name}</ST>
+          {equipGroups.map(grp=>(<div key={grp.key} style={{marginBottom:28}}>
+            <div style={{padding:"10px 16px",background:P.priBg,borderRadius:"8px 8px 0 0",border:`1px solid ${P.pri}22`,borderBottom:"none"}}>
+              <span style={{color:P.pri,fontWeight:700,fontSize:14}}>{grp.truckName} + {grp.diggerName}</span>
+            </div>
+            <div style={{...cardS,borderTopLeftRadius:0,borderTopRightRadius:0,overflowX:"auto"}}><table style={{borderCollapse:"collapse",fontFamily:ff,fontSize:12,width:"100%",minWidth:600}}>
+              <thead><tr style={{background:P.secBg,borderBottom:`2px solid ${P.bdS}`}}>
+                <th style={{...thS,minWidth:220,position:"sticky",left:0,background:P.secBg,zIndex:2}}>Variable</th>
+                <th style={{...thS,fontSize:10}}>Unit</th>
+                {grp.results.map((r,i)=><th key={i} style={{...thS,textAlign:"right",color:P.pri,fontWeight:700,minWidth:100}}>{r.periodLabel}</th>)}
+              </tr></thead>
+              <tbody>{formulas.map(f=>{
+                if(f.section)return <tr key={f.key}><td colSpan={2+grp.results.length} style={{padding:"12px 10px 6px",color:P.pri,fontWeight:700,fontSize:13,background:P.secBg}}>{f.section}</td></tr>;
+                return <tr key={f.key} style={{borderBottom:`1px solid ${P.bd}`}}>
+                  <td style={{padding:"5px 10px",color:P.txM,fontSize:12}}>{f.label}</td>
+                  <td style={{padding:"5px 6px",color:P.txD,fontSize:10,fontFamily:mf}}>{f.unit}</td>
+                  {grp.results.map((r,pi)=>{const v=r.res?.[f.key];return<td key={pi} style={{padding:"5px 8px",textAlign:"right",color:P.tx,fontSize:12,fontFamily:mf}}>{f.cur?fmtC2(v):fmt(v,f.dec||2)}</td>})}
+                </tr>})}</tbody>
+            </table></div>
+          </div>))}
+        </div>)}
+
+        {/* FORMULAS PAGE */}
+        {page==="formulas"&&(<div>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:12}}><ST icon="🧮">Formula Editor</ST><div style={{display:"flex",gap:8}}><input type="text" placeholder="Search..." value={formulaSearch} onChange={e=>setFormulaSearch(e.target.value)} style={{...selS,width:160}}/><Btn onClick={()=>{setFormulas(defaultFormulas())}} color={P.rd} small>Reset Defaults</Btn></div></div>
+          <div style={{...cardS,overflowX:"auto"}}><table style={{borderCollapse:"collapse",fontFamily:ff,fontSize:12,width:"100%"}}>
+            <thead><tr style={{background:P.secBg,borderBottom:`2px solid ${P.bdS}`}}>{[["#",28],["Key",105],["Label",180],["Unit",40],["Formula",null],["🧪 Test",110]].map(([h,w],i)=>(<th key={i} style={{...thS,width:w||"auto",textAlign:i===5?"right":"left"}}>{h}</th>))}</tr></thead>
+            <tbody>{formulas.filter(f=>!formulaSearch||f.label.toLowerCase().includes(formulaSearch.toLowerCase())).map((f,i)=>(<tr key={f.key} style={{borderBottom:`1px solid ${P.bd}`}}><td style={{padding:"4px 8px",color:P.txD,fontSize:10,fontFamily:mf}}>{i+1}</td><td style={{padding:"4px 8px"}}><code style={{color:P.pri,fontSize:10,fontFamily:mf}}>{f.key}</code></td><td style={{padding:"4px 8px",fontSize:12}}>{f.label}</td><td style={{padding:"4px 6px",color:P.txD,fontSize:10}}>{f.unit}</td><td style={{padding:"4px 8px"}}><code style={{color:"#475569",fontSize:10,fontFamily:mf,display:"block",padding:"3px 8px",borderRadius:5,background:P.input}}>{f.formula}</code></td><td style={{padding:"4px 8px",textAlign:"right",fontWeight:700,color:P.gn,fontSize:11,fontFamily:mf,background:P.gnBg+"33"}}>{f.cur?fmtC2(testResult?.[f.key]):fmt(testResult?.[f.key],f.dec||2)}</td></tr>))}</tbody>
+          </table></div>
+        </div>)}
+
+        {/* REST OF THE PLACEHOLDERS */}
+        {page==="schedule"&&(<div><ST icon="📤">Schedule — {scn.name}</ST><div style={{...cardS,padding:18}}><input ref={fileRef} type="file" accept=".csv" onChange={handleUpload}/></div></div>)}
+        {page==="truck"&&(<div><ST icon="🚛">Truck Models</ST>
+          <div style={{...cardS,overflowX:"auto"}}><table style={{borderCollapse:"collapse",width:"100%"}}>
+            <thead><tr style={{background:P.secBg,borderBottom:`2px solid ${P.bdS}`}}><th style={thS}>Parameter</th><th style={thS}>Unit</th>{trucks.map((t,i)=>(<th key={i} style={thS}>Model {i+1}</th>))}</tr></thead>
+            <tbody>{truckRows.map((r,i)=><CompRow key={i} {...r} models={trucks} onChange={updT}/>)}</tbody>
+          </table></div>
+        </div>)}
+        {page==="digger"&&(<div><ST icon="⛏️">Digger Models</ST>
+          <div style={{...cardS,overflowX:"auto"}}><table style={{borderCollapse:"collapse",width:"100%"}}>
+            <thead><tr style={{background:P.secBg,borderBottom:`2px solid ${P.bdS}`}}><th style={thS}>Parameter</th><th style={thS}>Unit</th>{diggers.map((d,i)=>(<th key={i} style={thS}>Model {i+1}</th>))}</tr></thead>
+            <tbody>{diggerRows.map((r,i)=><CompRow key={i} {...r} models={diggers} onChange={updD}/>)}</tbody>
+          </table></div>
+        </div>)}
+        {page==="other"&&(<div><ST icon="⚙️">General Assumptions</ST><div style={{...cardS,padding:24}}>{[["moistureContent","Moisture Content","%",0.001],["exchangeRate","Exchange Rate","ratio",0.01],["dieselCost","Diesel Cost","$/L",0.01]].map(([k,l,u,s])=>(<div key={k} style={{display:"flex",alignItems:"center",gap:12,marginBottom:10}}><div style={{flex:1,color:P.txM,fontSize:14,fontWeight:500}}>{l}</div><input type="number" value={otherA[k]} onChange={e=>uO(k,parseFloat(e.target.value)||0)} step={s||0.01} style={{width:145,padding:"7px 12px",background:P.input,border:`1px solid ${P.bd}`,borderRadius:7,color:P.tx,fontFamily:mf,fontSize:14,textAlign:"right"}}/><span style={{color:P.txD,fontSize:12,fontWeight:500,minWidth:55}}>{u}</span></div>))}</div></div>)}
+        {page==="comparison"&&(<div><ST icon="⚖️">Scenario Comparison</ST><div style={cardS}><div style={{padding:20,color:P.txM}}>Restore comparison table logic from version 3...</div></div></div>)}
       </div>
     </div>
   );
