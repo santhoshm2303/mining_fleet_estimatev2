@@ -262,10 +262,10 @@ export default function App(){
   const updFleet=(i,k,v)=>setFleets(p=>{const n=[...p];n[i]={...n[i],[k]:v};return n});
 
   const navGroups=[
-    {label:"Assumptions",items:[{id:"other",label:"General",icon:"⚙️"},{id:"truck",label:"Trucks",icon:"🚛"},{id:"digger",label:"Diggers",icon:"⛏️"}]},
-    {label:"Setup",items:[{id:"formulas",label:"Formulas",icon:"🧮"},{id:"fleets",label:"Fleet Combos",icon:"🏗️"}]},
-    {label:"Scenario Manager",items:[{id:"scenarios",label:"Scenarios",icon:"📋"},{id:"schedule",label:"Schedule",icon:"📅"},{id:"results",label:"Results",icon:"📊"}]},
-    {label:"Comparison",items:[{id:"comparison",label:"Comparison",icon:"⚖️"}]}
+    {label:"Assumptions",items:[{id:"other",label:"General",icon:"⚙️"},{id:"truck",label:"Trucks",icon:"🚛"},{id:"digger",label:"Diggers",icon:"⛏️"},{id:"charts_assumptions",label:"Charts",icon:"📈"}]},
+    {label:"Setup",items:[{id:"formulas",label:"Formulas",icon:"🧮"},{id:"fleets",label:"Fleet Combos",icon:"🏗️"},{id:"charts_setup",label:"Charts",icon:"📈"}]},
+    {label:"Scenario Manager",items:[{id:"scenarios",label:"Scenarios",icon:"📋"},{id:"schedule",label:"Schedule",icon:"📅"},{id:"results",label:"Results",icon:"📊"},{id:"charts_results",label:"Charts",icon:"📈"}]},
+    {label:"Comparison",items:[{id:"comparison",label:"Comparison",icon:"⚖️"},{id:"charts_compare",label:"Charts",icon:"📈"}]},
   ];
   const activeGroup=navGroups.find(g=>g.items.some(i=>i.id===page))||navGroups[0];
 
@@ -321,7 +321,8 @@ export default function App(){
                 {grp.results.map((r,i)=><th key={i} style={{...thS,textAlign:"right",color:P.pri,fontWeight:700,minWidth:100}}>{r.periodLabel}</th>)}
               </tr></thead>
               <tbody>{formulas.map(f=>{
-                if(f.section)return <tr key={f.key}><td colSpan={2+grp.results.length} style={{padding:"12px 10px 6px",color:P.pri,fontWeight:700,fontSize:13,background:P.secBg}}>{f.section}</td></tr>;
+                if(f.section)return <tr key={f.key} onClick={()=>togSec(f.section)} style={{cursor:"pointer"}}><td colSpan={2+grp.results.length} style={{padding:"12px 10px 6px",color:P.pri,fontWeight:700,fontSize:13,background:P.secBg}}>{collSec[f.section]?"▶":"▼"} {f.section}</td></tr>;
+                if(collSec[f.section]) return null;
                 return <tr key={f.key} style={{borderBottom:`1px solid ${P.bd}`}}>
                   <td style={{padding:"5px 10px",color:P.txM,fontSize:12}}>{f.label}</td>
                   <td style={{padding:"5px 6px",color:P.txD,fontSize:10,fontFamily:mf}}>{f.unit}</td>
@@ -355,7 +356,6 @@ export default function App(){
           </table></div>
         </div>)}
         {page==="other"&&(<div><ST icon="⚙️">General Assumptions</ST><div style={{...cardS,padding:24}}>{[["moistureContent","Moisture Content","%",0.001],["exchangeRate","Exchange Rate","ratio",0.01],["dieselCost","Diesel Cost","$/L",0.01]].map(([k,l,u,s])=>(<div key={k} style={{display:"flex",alignItems:"center",gap:12,marginBottom:10}}><div style={{flex:1,color:P.txM,fontSize:14,fontWeight:500}}>{l}</div><input type="number" value={otherA[k]} onChange={e=>uO(k,parseFloat(e.target.value)||0)} step={s||0.01} style={{width:145,padding:"7px 12px",background:P.input,border:`1px solid ${P.bd}`,borderRadius:7,color:P.tx,fontFamily:mf,fontSize:14,textAlign:"right"}}/><span style={{color:P.txD,fontSize:12,fontWeight:500,minWidth:55}}>{u}</span></div>))}</div></div>)}
-        {page==="comparison"&&(<div><ST icon="⚖️">Scenario Comparison</ST><div style={cardS}><div style={{padding:20,color:P.txM}}>Restore comparison table logic from version 3...</div></div></div>)}
       </div>
     </div>
   );
