@@ -1,41 +1,45 @@
 /* eslint-disable no-unused-vars */
-// ─── 1. ABSOLUTE TOP GLOBAL CONSTANTS (Using var to prevent TDZ errors) ───
+import { useState, useMemo, useCallback, useRef } from "react";
+import { ComposedChart, BarChart, Bar, LineChart, Line, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
+
+// ─── 1. DESIGN CONSTANTS ──────────────────────────────────────────────
 var P={bg:"#f8f9fc",card:"#fff",input:"#f3f4f8",bd:"#e0e3ea",bdS:"#c7cbd4",pri:"#1d4ed8",priBg:"#eef2ff",priTx:"#1e3a8a",tx:"#1a1f2e",txM:"#4b5563",txD:"#8992a3",gn:"#0d7a5f",gnBg:"#ecfdf5",rd:"#c93131",rdBg:"#fef2f2",bl:"#2563eb",blBg:"#eff6ff",hdr:"#111827",hdrTx:"#f0f1f4",secBg:"#f1f4f9",hlBg:"#e8eeff",hlTx:"#1e3a8a"};
 var ff="'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif";
 var mf="'SF Mono','Fira Code','Cascadia Code',Consolas,monospace";
 var mClr=["#1d4ed8","#0d7a5f","#c93131","#7c3aed","#be185d","#0e7490"];
 
-import { useState, useMemo, useCallback, useRef } from "react";
-import { ComposedChart, BarChart, Bar, LineChart, Line, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
-
 let _id = 100; const uid = () => "m" + (++_id);
 
-// ─── 2. UI DESIGN COMPONENTS ───────────────────────────────────────────
-const ST=({children,icon})=>(<div style={{display:"flex",alignItems:"center",gap:10,padding:"14px 0 10px",marginTop:20,borderBottom:`2px solid ${P.pri}`,marginBottom:14}}><span style={{fontSize:18}}>{icon}</span><span style={{color:P.pri,fontWeight:700,fontSize:15,fontFamily:ff}}>{children}</span></div>);
-const ChartToggles=({series,hidden,onToggle})=>(<div style={{display:"flex",gap:6,flexWrap:"wrap",padding:"8px 16px 4px"}}>{series.map(function(s){var vis=!hidden[s.key];return(<button key={s.key} onClick={function(){onToggle(s.key)}} style={{padding:"3px 10px",borderRadius:12,border:"1.5px solid "+(vis?s.color:P.bd),background:vis?s.color+"18":"transparent",color:vis?s.color:P.txD,fontFamily:ff,fontSize:10,fontWeight:600,cursor:"pointer",opacity:vis?1:0.4}}>{vis?"●":"○"} {s.label}</button>)})}</div>);
-const Btn=({children,onClick,color=P.pri,small,solid})=>(<button onClick={onClick} style={{padding:small?"5px 12px":"8px 20px",background:solid?color:"transparent",border:`1.5px solid ${color}`,borderRadius:7,color:solid?"#fff":color,fontFamily:ff,fontSize:12,cursor:"pointer",fontWeight:600}}>{children}</button>);
-const cardS={background:P.card,borderRadius:10,border:`1px solid ${P.bd}`,boxShadow:"0 1px 4px rgba(0,0,0,0.05)"};
-const selS={padding:"6px 12px",background:P.input,border:`1px solid ${P.bd}`,borderRadius:6,color:P.tx,fontFamily:ff,fontSize:12};
-const thS={padding:"9px 10px",color:P.txM,textAlign:"left",fontSize:11,fontWeight:600};
-
-// ─── 3. MODEL FACTORIES ───────────────────────────────────────────────────
+// ─── 2. MODEL FACTORIES (MUST BE DEFINED BEFORE APP) ───────────────────
 const mkTruck = (ov={}) => ({ id: uid(), truckName:"XCMG XGE150 Plus 10YMP", payload:85, powerSource:"Battery - Charge", batterySize:828, economicLife:80000, tkphLimit:254.2, availability:0.86, useOfAvailability:0.96, operatingEfficiency:0.79, utToSmuConversion:1.06, spotTimeLoad:0.46, queueTimeLoad:0, spotTimeDump:0.5, queueTimeDump:0, dumpTime:0.5, performanceEfficiency:0.99, totalTruckCapex:2185181.43, capexPerSmuHour:27.31, powerSystemCost:383890, opexPerSmuHour:156.54, operatorRate:133, nominalBatteryCapacityNew:828, averageBatteryUsableCapacity:563.04, travelToRechargeEnergy:10, travelToSwapChargerStationTime:2.96, chargerQueueTime:0, chargerConnectionPositioningTime:0, equivalentFullLifeCycles:4500, chargingTime:50, rechargeRateC:1.2, swapTotalSwapTime:14.5, chargerOperatingTime:6740.82, demandResponseAllowance:0, numBatteriesPerStation:1, totalChargerCapex:4703194.09, avgChargerEffectiveHours:6740.82, totalChargerOandO:70.19, ...ov });
+
 const mkTruckL = () => mkTruck({ truckName:"Liebherr BET264 10ymp", payload:240, batterySize:2580, economicLife:84000, tkphLimit:1400, availability:0.88, useOfAvailability:0.936, operatingEfficiency:0.803, spotTimeLoad:0.46, queueTimeLoad:0, spotTimeDump:0.5, queueTimeDump:0, dumpTime:1.0, totalTruckCapex:11198255.71, capexPerSmuHour:133.31, powerSystemCost:2313980, opexPerSmuHour:478.80, nominalBatteryCapacityNew:2580, averageBatteryUsableCapacity:2037.5, travelToRechargeEnergy:17.4, equivalentFullLifeCycles:5950, chargingTime:33.18, rechargeRateC:2.0, totalChargerCapex:9722830, totalChargerOandO:143.25 });
+
 const mkDigger = (ov={}) => ({ id: uid(), diggerName:"300t Cable Electric Backhoe", powerSource:"Cable Electric", availability:0.90, useOfAvailability:0.83, operatingEfficiency:0.38, utToSmuConversion:1.03, equipmentLife:80000, effectiveTime:2487, effectiveDigRate:2800, totalCapex:8995710, capexPerSmuHour:112.45, dieselElectricityCost:86.6, maintenanceLabour:91, oilAndCoolant:12.6, partsComponentsPM05:223, materialsConsumables:0, get:76.5, cableCost:2.4, tracks:0, tires:0, fmsLicenseFee:42.99, batteryReplacement:0, operatorCost:130, rehandleCostPerTonne:1.13, ...ov });
+
 const mkDigger4 = () => mkDigger({ diggerName:"400t Cable Electric Backhoe", effectiveDigRate:5100, totalCapex:13698717.31, capexPerSmuHour:171.23, dieselElectricityCost:108.21, oilAndCoolant:21, partsComponentsPM05:304, get:90 });
+
 const defaultOther = () => ({ moistureContent:0.052, exchangeRate:0.70, discountRate:0.115, electricityCost:0.1443, dieselCost:0.9102, allInFitterPerYear:182, mannedOperator:133, calendarTime:8760, diggerFleetRoundingThreshold:0.5 });
 
-// ─── HELPERS ───────────────────────────────────────────────────────────
+const mkFleet = (name,truckIdx=0,diggerIdx=0) => ({ id:uid(), name, truckIdx, diggerIdx, loadTime:1.0 });
+
+const mkScenario = (name="New Scenario") => ({
+  id: uid(), name,
+  csvData: null, csvRawLabels: [],
+  manualData: [{period:1,periodLabel:"2032/Q2",days:91,hours:2184,oreMined:0,wasteMined:77261,totalMined:77261,totalRampMined:77261,avgLoadedTravelTime:3.3,avgUnloadedTravelTime:2.5,avgTkphDelay:0,avgNetPower:255.9,oreFePct:61.5,oreSiPct:3.7,oreAlPct:2.2,orePPct:0.08}],
+  fieldMappings: [{id:uid(),name:"Base Set",fields:{oreMined:"Ore Mined",wasteMined:"Waste Mined",totalMined:"Total Mined",totalRampMined:"Total Mined",avgLoadedTravelTime:"Average loaded travel time",avgUnloadedTravelTime:"Average unloaded travel time",avgTkphDelay:"Average TKPH delay",avgNetPower:"Average Net Power",oreFePct:"Ore Fe %",oreSiPct:"Ore Si %",oreAlPct:"Ore Al %",orePPct:"Ore P %"}}],
+  activeFleetIds: [], fleetPhysicalSets: {}, schedPeriod: "Quarterly", unitMul: 1
+});
+
+// ─── 3. HELPERS & ENGINE ────────────────────────────────────────────────
 const fmt = (v,d=2) => { if(v===""||v==null||isNaN(v)) return "—"; return Number(v).toLocaleString("en-AU",{minimumFractionDigits:d,maximumFractionDigits:d}); };
 const fmtInt = v => fmt(v,0);
 const fmtC2 = v => { if(v===""||v==null||isNaN(v)) return "—"; return "$"+Number(v).toLocaleString("en-AU",{minimumFractionDigits:2,maximumFractionDigits:2}); };
 const fmtCur = v => { if(v===""||v==null||isNaN(v)) return "—"; if(Math.abs(v)>=1e6) return "$"+(v/1e6).toFixed(2)+"M"; return "$"+Number(v).toLocaleString("en-AU",{minimumFractionDigits:0,maximumFractionDigits:0}); };
 
-// ─── EXPRESSION ENGINE ─────────────────────────────────────────────────
 function tokenize(e){const t=[];let i=0;while(i<e.length){if(/\s/.test(e[i])){i++;continue}if(/[0-9.]/.test(e[i])){let n="";while(i<e.length&&/[0-9.eE\-]/.test(e[i]))n+=e[i++];t.push({type:"num",val:parseFloat(n)})}else if(/[a-zA-Z_]/.test(e[i])){let d="";while(i<e.length&&/[a-zA-Z_0-9]/.test(e[i]))d+=e[i++];t.push({type:"id",val:d})}else if("+-*/(),<>=!&|?:".includes(e[i])){let o=e[i++];if("<>=!".includes(o[0])&&e[i]==='=')o+=e[i++];if(o==='&'&&e[i]==='&')o+=e[i++];if(o==='|'&&e[i]==='|')o+=e[i++];t.push({type:"op",val:o})}else i++}return t}
 function evalExpr(expr,ctx){try{const tk=tokenize(expr);let p=0;const pk=()=>tk[p]||null,eat=(v)=>{const t=tk[p];if(v&&t?.val!==v)throw 0;p++;return t};function pT(){let r=pO();if(pk()?.val==='?'){eat('?');const a=pT();eat(':');const b=pT();return r?a:b}return r}function pO(){let r=pA();while(pk()?.val==='||'){eat();r=r||pA()}return r}function pA(){let r=pC();while(pk()?.val==='&&'){eat();r=r&&pC()}return r}function pC(){let r=pAd();while(pk()?.val&&['<','>','<=','>=','==','!='].includes(pk().val)){const o=eat().val,b=pAd();r=o==='<'?r<b:o==='>'?r>b:o==='<='?r<=b:o==='>='?r>=b:o==='=='?r==b:r!=b}return r}function pAd(){let r=pM();while(pk()?.val==='+'||pk()?.val==='-'){const o=eat().val,b=pM();r=o==='+'?r+b:r-b}return r}function pM(){let r=pU();while(pk()?.val==='*'||pk()?.val==='/'){const o=eat().val,b=pU();r=o==='*'?r*b:r/b}return r}function pU(){if(pk()?.val==='-'){eat();return -pP()}return pP()}function pP(){const t=pk();if(!t)throw 0;if(t.type==="num"){eat();return t.val}if(t.val==='('){eat('(');const r=pT();eat(')');return r}if(t.type==="id"){const nm=eat().val;const fns={ceil:Math.ceil,floor:Math.floor,max:Math.max,min:Math.min,abs:Math.abs,round:Math.round,CEIL:Math.ceil,FLOOR:Math.floor,MAX:Math.max,MIN:Math.min,ABS:Math.abs,ROUND:Math.round,ROUNDUP:Math.ceil,ROUNDDOWN:Math.floor};if((nm==="IF"||nm==="if")&&pk()?.val==='('){eat('(');const c=pT();eat(',');const a=pT();eat(',');const b=pT();eat(')');return c?a:b}if(fns[nm]&&pk()?.val==='('){eat('(');const args=[pT()];while(pk()?.val===','){eat(',');args.push(pT())}eat(')');return fns[nm](...args)}if(ctx.hasOwnProperty(nm)){const v=ctx[nm];return typeof v==="number"?v:(parseFloat(v)||0)}return 0}throw 0}const result=pT();return isFinite(result)?result:""}catch{return ""}}
 
-// ─── 4. DEFAULT FORMULAS ───────────────────────────────────────────────
 const defaultFormulas = () => [
   {key:"digOE",label:"Digger Overall Efficiency",unit:"ratio",section:"⛏️ DIGGER — Hours & Fleet",group:"Digger TUM",formula:"D_availability * D_useOfAvailability * D_operatingEfficiency",dec:4},
   {key:"digHrsReq",label:"Digger Hours Required",unit:"hrs",group:"Digger TUM",formula:"totalMined / D_effectiveDigRate"},
@@ -129,7 +133,23 @@ const defaultFormulas = () => [
   {key:"totPerT",label:"Total $/t",unit:"$/t",group:"Inc Capex",formula:"totCost / totalRampMined",hl:1,cur:1},
 ];
 
-// ─── 5. THE MAIN APP ───────────────────────────────────────────────────
+// ─── 4. UI COMPONENTS ──────────────────────────────────────────────────
+const ST=({children,icon})=>(<div style={{display:"flex",alignItems:"center",gap:10,padding:"14px 0 10px",marginTop:20,borderBottom:`2px solid ${P.pri}`,marginBottom:14}}><span style={{fontSize:18}}>{icon}</span><span style={{color:P.pri,fontWeight:700,fontSize:15,fontFamily:ff}}>{children}</span></div>);
+const ChartToggles=({series,hidden,onToggle})=>(<div style={{display:"flex",gap:6,flexWrap:"wrap",padding:"8px 16px 4px"}}>{series.map(function(s){var vis=!hidden[s.key];return(<button key={s.key} onClick={function(){onToggle(s.key)}} style={{padding:"3px 10px",borderRadius:12,border:"1.5px solid "+(vis?s.color:P.bd),background:vis?s.color+"18":"transparent",color:vis?s.color:P.txD,fontFamily:ff,fontSize:10,fontWeight:600,cursor:"pointer",opacity:vis?1:0.4}}>{vis?"●":"○"} {s.label}</button>)})}</div>);
+const Btn=({children,onClick,color=P.pri,small,solid})=>(<button onClick={onClick} style={{padding:small?"5px 12px":"8px 20px",background:solid?color:"transparent",border:`1.5px solid ${color}`,borderRadius:7,color:solid?"#fff":color,fontFamily:ff,fontSize:12,cursor:"pointer",fontWeight:600}}>{children}</button>);
+const cardS={background:P.card,borderRadius:10,border:`1px solid ${P.bd}`,boxShadow:"0 1px 4px rgba(0,0,0,0.05)"};
+const selS={padding:"6px 12px",background:P.input,border:`1px solid ${P.bd}`,borderRadius:6,color:P.tx,fontFamily:ff,fontSize:12};
+const thS={padding:"9px 10px",color:P.txM,textAlign:"left",fontSize:11,fontWeight:600};
+
+const CompRow=({label,field,models,onChange,unit,type="number",step,section})=>{
+  if(section)return(<tr><td colSpan={models.length+2} style={{padding:"16px 14px 6px",color:P.pri,fontWeight:700,fontSize:13,borderBottom:`2px solid ${P.pri}20`,fontFamily:ff,background:P.secBg}}>{label}</td></tr>);
+  return(<tr style={{borderBottom:`1px solid ${P.bd}`}}><td style={{padding:"7px 14px",color:P.txM,fontSize:13,fontFamily:ff,whiteSpace:"nowrap",position:"sticky",left:0,background:P.card,zIndex:1}}>{label}</td><td style={{padding:"7px 8px",color:P.txD,fontSize:11,fontFamily:mf}}>{unit}</td>{models.map((m,i)=>(<td key={m.id||i} style={{padding:"3px 6px"}}>{type==="text"?<input type="text" value={m[field]||""} onChange={e=>onChange(i,field,e.target.value)} style={{width:"100%",minWidth:115,padding:"6px 10px",background:P.input,border:`1px solid ${P.bd}`,borderRadius:6,color:P.tx,fontFamily:ff,fontSize:13}}/>:<input type="number" value={m[field]??""} onChange={e=>onChange(i,field,parseFloat(e.target.value)||0)} step={step||0.01} style={{width:"100%",minWidth:105,padding:"6px 10px",background:P.input,border:`1px solid ${P.bd}`,borderRadius:6,color:P.tx,fontFamily:mf,fontSize:13,textAlign:"right"}}/>}</td>))}</tr>);
+};
+
+const truckRows=[{section:true,label:"Identity & TUM"},{field:"truckName",label:"Truck Name",type:"text"},{field:"payload",label:"Payload",unit:"t"},{field:"powerSource",label:"Power Source",type:"text"},{field:"availability",label:"Availability",unit:"%",step:0.01},{field:"useOfAvailability",label:"Use of Availability",unit:"%",step:0.01},{field:"operatingEfficiency",label:"Operating Efficiency",unit:"%",step:0.01},{field:"utToSmuConversion",label:"UT → SMU",unit:"#"},{field:"performanceEfficiency",label:"Perf Efficiency",unit:"%",step:0.01},{section:true,label:"Spot / Queue / Dump Times"},{field:"spotTimeLoad",label:"Spot Time at Load",unit:"min"},{field:"queueTimeLoad",label:"Queue Time at Load",unit:"min"},{field:"spotTimeDump",label:"Spot Time at Dump",unit:"min"},{field:"queueTimeDump",label:"Queue Time at Dump",unit:"min"},{field:"dumpTime",label:"Dump Time",unit:"min"},{section:true,label:"Capital Expenditure"},{field:"totalTruckCapex",label:"Total Capex",unit:"AUD",step:1000},{field:"capexPerSmuHour",label:"Capex/SMU Hr",unit:"$/SMU"},{field:"powerSystemCost",label:"Power System",unit:"AUD",step:1000},{section:true,label:"Operating Expenditure"},{field:"opexPerSmuHour",label:"Opex/SMU Hr",unit:"$/hr"},{field:"operatorRate",label:"Operator Rate",unit:"$/SMU"},{section:true,label:"Charging"},{field:"nominalBatteryCapacityNew",label:"Nom Battery Cap",unit:"kWh"},{field:"averageBatteryUsableCapacity",label:"Avg Usable Cap",unit:"kWh"},{field:"travelToRechargeEnergy",label:"Travel Rchg Energy",unit:"kWh"},{field:"travelToSwapChargerStationTime",label:"Travel to Charger",unit:"min"},{field:"chargerQueueTime",label:"Queue Time",unit:"min"},{field:"chargerConnectionPositioningTime",label:"Connection Time",unit:"min"},{field:"equivalentFullLifeCycles",label:"Equiv Life Cycles",unit:"#"},{field:"chargingTime",label:"Charging Time",unit:"min"},{field:"rechargeRateC",label:"Recharge Rate",unit:"C"},{section:true,label:"Charger Infrastructure"},{field:"chargerOperatingTime",label:"Charger Op Time",unit:"hrs"},{field:"demandResponseAllowance",label:"Demand Resp %",unit:"%",step:0.01},{field:"numBatteriesPerStation",label:"Batteries/Station",unit:"#"},{field:"totalChargerCapex",label:"Charger Capex",unit:"AUD",step:1000},{field:"avgChargerEffectiveHours",label:"Avg Charger Eff Hrs",unit:"hrs"},{field:"totalChargerOandO",label:"Charger O&O",unit:"$/SMU"}];
+const diggerRows=[{section:true,label:"Identity & TUM"},{field:"diggerName",label:"Digger Name",type:"text"},{field:"powerSource",label:"Power Source",type:"text"},{field:"effectiveDigRate",label:"Eff Dig Rate",unit:"t/hr",step:100},{field:"availability",label:"Availability",unit:"%",step:0.01},{field:"useOfAvailability",label:"Use of Availability",unit:"%",step:0.01},{field:"operatingEfficiency",label:"Op Efficiency",unit:"%",step:0.01},{field:"utToSmuConversion",label:"UT → SMU",unit:"#"},{field:"equipmentLife",label:"Equip Life",unit:"hrs"},{field:"effectiveTime",label:"Eff Time",unit:"hrs"},{section:true,label:"Capital Expenditure"},{field:"totalCapex",label:"Total Capex",unit:"AUD",step:10000},{field:"capexPerSmuHour",label:"Capex/SMU",unit:"$/SMU"},{section:true,label:"Operating Expenditure (per SMU)"},{field:"dieselElectricityCost",label:"Diesel/Elec",unit:"$/SMU"},{field:"maintenanceLabour",label:"Maint Labour",unit:"$/SMU"},{field:"oilAndCoolant",label:"Oil & Coolant",unit:"$/SMU"},{field:"partsComponentsPM05",label:"Parts PM05",unit:"$/SMU"},{field:"materialsConsumables",label:"Materials",unit:"$/SMU"},{field:"get",label:"GET",unit:"$/SMU"},{field:"cableCost",label:"Cable Cost",unit:"$/SMU"},{field:"tracks",label:"Tracks",unit:"$/SMU"},{field:"tires",label:"Tires",unit:"$/SMU"},{field:"fmsLicenseFee",label:"FMS License",unit:"$/SMU"},{field:"batteryReplacement",label:"Battery Repl",unit:"$/SMU"},{field:"operatorCost",label:"Operator",unit:"$/SMU"},{field:"rehandleCostPerTonne",label:"Rehandle $/t",unit:"$/t"}];
+
+// ─── 5. APP COMPONENT ──────────────────────────────────────────────────
 export default function App(){
   const [page,setPage]=useState("scenarios");
   const [trucks,setTrucks]=useState(()=>[mkTruck(),mkTruckL()]);
@@ -196,34 +216,18 @@ export default function App(){
     return all;
   },[numPeriods,activeFleets,trucks,diggers,otherA,formulas,scn,getPd]);
 
-  const equipGroups=useMemo(()=>{
-    const g={};for(const r of results){if(!g[r.equipKey])g[r.equipKey]={key:r.equipKey,truckName:r.truckName,diggerName:r.diggerName,fleetNames:[],results:[]};if(!g[r.equipKey].fleetNames.includes(r.fleetName))g[r.equipKey].fleetNames.push(r.fleetName);g[r.equipKey].results.push(r)}
-    return Object.values(g);
-  },[results]);
-
   const totals=useMemo(()=>{const t={m:0,c:0};results.forEach(r=>{if(!r.res)return;t.m+=(r.pd?.totalMined||0)*scn.unitMul;t.c+=r.res.totCost||0});t.cpt=t.m>0?t.c/t.m:0;return t},[results,scn.unitMul]);
-
-  const testResult=useMemo(()=>{
-    const fleet=activeFleets[testFleetIdx]||activeFleets[0];if(!fleet)return null;
-    const pd=getPd(testPeriodIdx,fleet);if(!pd)return null;
-    const ti=Math.min(fleet.truckIdx,trucks.length-1),di=Math.min(fleet.diggerIdx,diggers.length-1);
-    return calcWithFormulas({totalMined:(pd.totalMined||0)*scn.unitMul,oreMined:(pd.oreMined||0)*scn.unitMul,totalRampMined:(pd.totalRampMined||pd.totalMined||0)*scn.unitMul,avgLoadedTravelTime:pd.avgLoadedTravelTime||0,avgUnloadedTravelTime:pd.avgUnloadedTravelTime||0,avgNetPower:pd.avgNetPower||0,avgTkphDelay:pd.avgTkphDelay||0,schedPeriod:scn.schedPeriod,calendarDays:pd.days||91,calendarHours:pd.hours||2184,truck:trucks[ti],digger:diggers[di],other:otherA,fleet:fleet},formulas);
-  },[testPeriodIdx,testFleetIdx,activeFleets,trucks,diggers,otherA,formulas,scn,getPd]);
 
   const updT=(i,f,v)=>setTrucks(p=>{const n=[...p];n[i]={...n[i],[f]:v};return n});
   const updD=(i,f,v)=>setDiggers(p=>{const n=[...p];n[i]={...n[i],[f]:v};return n});
   const uO=(k,v)=>setOtherA(p=>({...p,[k]:v}));
   const updFleet=(i,k,v)=>setFleets(p=>{const n=[...p];n[i]={...n[i],[k]:v};return n});
-  const updMapping=(si,fi,fk,v)=>updScn(s=>{const m=[...s.fieldMappings];m[si]={...m[si],fields:{...m[si].fields,[fk]:v}};return{...s,fieldMappings:m}});
-  const addManP=()=>updScn(s=>({...s,manualData:[...s.manualData,{period:s.manualData.length+1,periodLabel:`P${s.manualData.length+1}`,days:91,hours:2184,oreMined:0,wasteMined:0,totalMined:0,totalRampMined:0,avgLoadedTravelTime:10,avgUnloadedTravelTime:8,avgTkphDelay:0,avgNetPower:150,oreFePct:0,oreSiPct:0,oreAlPct:0,orePPct:0}]}));
-  const updManP=(i,k,v)=>updScn(s=>{const d=[...s.manualData];d[i]={...d[i],[k]:v};if(k==="oreMined"||k==="wasteMined"){d[i].totalMined=(d[i].oreMined||0)+(d[i].wasteMined||0);d[i].totalRampMined=d[i].totalMined}if(k==="days")d[i].hours=v*24;return{...s,manualData:d}});
-  const toggleFleetInScn=(fid)=>updScn(s=>{const ids=s.activeFleetIds.includes(fid)?s.activeFleetIds.filter(x=>x!==fid):[...s.activeFleetIds,fid];return{...s,activeFleetIds:ids}});
 
   const navGroups=[
-    {label:"Assumptions",items:[{id:"other",label:"General",icon:"⚙️"},{id:"truck",label:"Trucks",icon:"🚛"},{id:"digger",label:"Diggers",icon:"⛏️"},{id:"charts_assumptions",label:"Charts",icon:"📈"}]},
-    {label:"Setup",items:[{id:"formulas",label:"Formulas",icon:"🧮"},{id:"fleets",label:"Fleet Combos",icon:"🏗️"},{id:"charts_setup",label:"Charts",icon:"📈"}]},
-    {label:"Scenario Manager",items:[{id:"scenarios",label:"Scenarios",icon:"📋"},{id:"schedule",label:"Schedule",icon:"📅"},{id:"mapping",label:"Field Mapping",icon:"🔗"},{id:"results",label:"Results",icon:"📊"},{id:"charts_results",label:"Charts",icon:"📈"}]},
-    {label:"Compare",items:[{id:"comparison",label:"Comparison",icon:"⚖️"},{id:"charts_compare",label:"Charts",icon:"📈"}]},
+    {label:"Assumptions",items:[{id:"other",label:"General",icon:"⚙️"},{id:"truck",label:"Trucks",icon:"🚛"},{id:"digger",label:"Diggers",icon:"⛏️"}]},
+    {label:"Setup",items:[{id:"formulas",label:"Formulas",icon:"🧮"},{id:"fleets",label:"Fleet Combos",icon:"🏗️"}]},
+    {label:"Scenario Manager",items:[{id:"scenarios",label:"Scenarios",icon:"📋"},{id:"schedule",label:"Schedule",icon:"📅"},{id:"results",label:"Results",icon:"📊"}]},
+    {label:"Comparison",items:[{id:"comparison",label:"Comparison",icon:"⚖️"}]}
   ];
   const activeGroup=navGroups.find(g=>g.items.some(i=>i.id===page))||navGroups[0];
 
@@ -233,7 +237,7 @@ export default function App(){
       <div style={{background:P.hdr,padding:"12px 32px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
         <div style={{display:"flex",alignItems:"center",gap:14}}>
           <div style={{width:36,height:36,borderRadius:9,background:"linear-gradient(135deg,#1d4ed8,#3b82f6)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:18}}>⛏️</div>
-          <div><h1 style={{margin:0,fontSize:17,fontWeight:700,color:P.hdrTx}}>Mining Fleet Cost Engine</h1><p style={{margin:0,color:"#9ca3af",fontSize:11}}>Scenario Manager · Multi-Fleet · Field Mapping</p></div>
+          <div><h1 style={{margin:0,fontSize:17,fontWeight:700,color:P.hdrTx}}>Mining Fleet Cost Engine</h1></div>
         </div>
         <div style={{display:"flex",gap:16,alignItems:"center"}}>
           <select value={activeScnIdx} onChange={e=>setActiveScnIdx(parseInt(e.target.value))} style={{padding:"6px 14px",background:"#1f2937",border:"1px solid #374151",borderRadius:6,color:"#60a5fa",fontFamily:ff,fontSize:13,fontWeight:700}}>
@@ -257,19 +261,24 @@ export default function App(){
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}><ST icon="📋">Scenario Manager</ST><Btn onClick={()=>setScenarios(p=>[...p,mkScenario(`Scenario ${p.length+1}`)])} solid>+ New Scenario</Btn></div>
           <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill, minmax(340px, 1fr))",gap:16}}>{scenarios.map((s,si)=>(
               <div key={s.id} style={{...cardS,padding:20,border:si===activeScnIdx?`2px solid ${P.pri}`:`1px solid ${P.bd}`}}>
-                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}><input type="text" value={s.name} onChange={e=>setScenarios(p=>{const n=[...p];n[si]={...n[si],name:e.target.value};return n})} style={{padding:"6px 10px",background:P.input,border:`1px solid ${P.bd}`,borderRadius:6,color:P.pri,fontFamily:ff,fontSize:16,fontWeight:700,width:200}}/>{scenarios.length>1&&<button onClick={()=>{setScenarios(p=>p.filter((_,i)=>i!==si));if(activeScnIdx>=scenarios.length-1)setActiveScnIdx(Math.max(0,activeScnIdx-1))}} style={{background:P.rdBg,border:`1px solid ${P.rd}22`,borderRadius:5,color:P.rd,cursor:"pointer",padding:"4px 10px",fontSize:11}}>Delete</button>}</div>
-                <div style={{fontSize:12,color:P.txM,marginBottom:8}}><div>📅 {s.csvData?`${s.csvData.np} periods from CSV`:`${s.manualData.length} manual periods`}</div><div>🔗 {s.fieldMappings.length} physical set{s.fieldMappings.length>1?"s":""}</div></div>
+                <input type="text" value={s.name} onChange={e=>setScenarios(p=>{const n=[...p];n[si]={...n[si],name:e.target.value};return n})} style={{padding:"6px 10px",background:P.input,border:`1px solid ${P.bd}`,borderRadius:6,color:P.pri,fontFamily:ff,fontSize:16,fontWeight:700,width:200}}/>
+                <div style={{fontSize:12,color:P.txM,marginTop:10}}>📅 {s.csvData?`${s.csvData.np} periods`:`${s.manualData.length} periods`}</div>
                 <div style={{display:"flex",gap:8,marginTop:12}}><Btn onClick={()=>setActiveScnIdx(si)} solid={si===activeScnIdx} color={si===activeScnIdx?P.pri:P.txD} small>{si===activeScnIdx?"Active":"Select"}</Btn></div>
               </div>))}</div>
         </div>)}
         {page==="schedule"&&(<div><ST icon="📤">Schedule — {scn.name}</ST><div style={{...cardS,padding:18}}><input ref={fileRef} type="file" accept=".csv" onChange={handleUpload}/></div></div>)}
-        {page==="mapping"&&(<div><ST icon="🔗">Field Mapping — {scn.name}</ST></div>)}
-        {page==="results"&&(<div><ST icon="📊">Results — {scn.name}</ST></div>)}
-        {page==="formulas"&&(<div><ST icon="🧮">Formula Editor</ST></div>)}
-        {page==="truck"&&(<div><ST icon="🚛">Truck Models</ST></div>)}
-        {page==="digger"&&(<div><ST icon="⛏️">Digger Models</ST></div>)}
-        {page==="other"&&(<div><ST icon="⚙️">General Assumptions</ST></div>)}
-        {page==="comparison"&&(<div><ST icon="⚖️">Comparison</ST></div>)}
+        {page==="truck"&&(<div><ST icon="🚛">Truck Models</ST>
+          <div style={{...cardS,overflowX:"auto"}}><table style={{borderCollapse:"collapse",width:"100%"}}>
+            <thead><tr style={{background:P.secBg}}><th style={thS}>Parameter</th><th style={thS}>Unit</th>{trucks.map((t,i)=>(<th key={i} style={thS}>Model {i+1}</th>))}</tr></thead>
+            <tbody>{truckRows.map((r,i)=><CompRow key={i} {...r} models={trucks} onChange={updT}/>)}</tbody>
+          </table></div>
+        </div>)}
+        {page==="digger"&&(<div><ST icon="⛏️">Digger Models</ST>
+          <div style={{...cardS,overflowX:"auto"}}><table style={{borderCollapse:"collapse",width:"100%"}}>
+            <thead><tr style={{background:P.secBg}}><th style={thS}>Parameter</th><th style={thS}>Unit</th>{diggers.map((d,i)=>(<th key={i} style={thS}>Model {i+1}</th>))}</tr></thead>
+            <tbody>{diggerRows.map((r,i)=><CompRow key={i} {...r} models={diggers} onChange={updD}/>)}</tbody>
+          </table></div>
+        </div>)}
       </div>
     </div>
   );
