@@ -2,7 +2,7 @@
 import { useState, useMemo, useCallback, useRef } from "react";
 import { ComposedChart, BarChart, Bar, LineChart, Line, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
 
-// ─── 1. ABSOLUTE TOP CONSTANTS ─────────────────────────────────────────
+// ─── 1. GLOBAL CONSTANTS ──────────────────────────────────────────────
 var P={bg:"#f8f9fc",card:"#fff",input:"#f3f4f8",bd:"#e0e3ea",bdS:"#c7cbd4",pri:"#1d4ed8",priBg:"#eef2ff",priTx:"#1e3a8a",tx:"#1a1f2e",txM:"#4b5563",txD:"#8992a3",gn:"#0d7a5f",gnBg:"#ecfdf5",rd:"#c93131",rdBg:"#fef2f2",bl:"#2563eb",blBg:"#eff6ff",hdr:"#111827",hdrTx:"#f0f1f4",secBg:"#f1f4f9",hlBg:"#e8eeff",hlTx:"#1e3a8a"};
 var ff="'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif";
 var mf="'SF Mono','Fira Code','Cascadia Code',Consolas,monospace";
@@ -10,7 +10,13 @@ var mClr=["#1d4ed8","#0d7a5f","#c93131","#7c3aed","#be185d","#0e7490"];
 
 let _id = 100; const uid = () => "m" + (++_id);
 
-// ─── 2. EXPRESSION & CALC ENGINE (MUST BE DEFINED EARLY) ───────────────
+// ─── 2. FORMATTING HELPERS (CRITICAL: DEFINED BEFORE USE) ──────────────
+const fmt = (v,d=2) => { if(v===""||v==null||isNaN(v)) return "—"; return Number(v).toLocaleString("en-AU",{minimumFractionDigits:d,maximumFractionDigits:d}); };
+const fmtInt = v => fmt(v,0);
+const fmtC2 = v => { if(v===""||v==null||isNaN(v)) return "—"; return "$"+Number(v).toLocaleString("en-AU",{minimumFractionDigits:2,maximumFractionDigits:2}); };
+const fmtCur = v => { if(v===""||v==null||isNaN(v)) return "—"; if(Math.abs(v)>=1e6) return "$"+(v/1e6).toFixed(2)+"M"; return "$"+Number(v).toLocaleString("en-AU",{minimumFractionDigits:0,maximumFractionDigits:0}); };
+
+// ─── 3. EXPRESSION & CALC ENGINE ───────────────────────────────────────
 function tokenize(e){const t=[];let i=0;while(i<e.length){if(/\s/.test(e[i])){i++;continue}if(/[0-9.]/.test(e[i])){let n="";while(i<e.length&&/[0-9.eE\-]/.test(e[i]))n+=e[i++];t.push({type:"num",val:parseFloat(n)})}else if(/[a-zA-Z_]/.test(e[i])){let d="";while(i<e.length&&/[a-zA-Z_0-9]/.test(e[i]))d+=e[i++];t.push({type:"id",val:d})}else if("+-*/(),<>=!&|?:".includes(e[i])){let o=e[i++];if("<>=!".includes(o[0])&&e[i]==='=')o+=e[i++];if(o==='&'&&e[i]==='&')o+=e[i++];if(o==='|'&&e[i]==='|')o+=e[i++];t.push({type:"op",val:o})}else i++}return t}
 function evalExpr(expr,ctx){try{const tk=tokenize(expr);let p=0;const pk=()=>tk[p]||null,eat=(v)=>{const t=tk[p];if(v&&t?.val!==v)throw 0;p++;return t};function pT(){let r=pO();if(pk()?.val==='?'){eat('?');const a=pT();eat(':');const b=pT();return r?a:b}return r}function pO(){let r=pA();while(pk()?.val==='||'){eat();r=r||pA()}return r}function pA(){let r=pC();while(pk()?.val==='&&'){eat();r=r&&pC()}return r}function pC(){let r=pAd();while(pk()?.val&&['<','>','<=','>=','==','!='].includes(pk().val)){const o=eat().val,b=pAd();r=o==='<'?r<b:o==='>'?r>b:o==='<='?r<=b:o==='>='?r>=b:o==='=='?r==b:r!=b}return r}function pAd(){let r=pM();while(pk()?.val==='+'||pk()?.val==='-'){const o=eat().val,b=pM();r=o==='+'?r+b:r-b}return r}function pM(){let r=pU();while(pk()?.val==='*'||pk()?.val==='/'){const o=eat().val,b=pU();r=o==='*'?r*b:r/b}return r}function pU(){if(pk()?.val==='-'){eat();return -pP()}return pP()}function pP(){const t=pk();if(!t)throw 0;if(t.type==="num"){eat();return t.val}if(t.val==='('){eat('(');const r=pT();eat(')');return r}if(t.type==="id"){const nm=eat().val;const fns={ceil:Math.ceil,floor:Math.floor,max:Math.max,min:Math.min,abs:Math.abs,round:Math.round,CEIL:Math.ceil,FLOOR:Math.floor,MAX:Math.max,MIN:Math.min,ABS:Math.abs,ROUND:Math.round,ROUNDUP:Math.ceil,ROUNDDOWN:Math.floor};if((nm==="IF"||nm==="if")&&pk()?.val==='('){eat('(');const c=pT();eat(',');const a=pT();eat(',');const b=pT();eat(')');return c?a:b}if(fns[nm]&&pk()?.val==='('){eat('(');const args=[pT()];while(pk()?.val===','){eat(',');args.push(pT())}eat(')');return fns[nm](...args)}if(ctx.hasOwnProperty(nm)){const v=ctx[nm];return typeof v==="number"?v:(parseFloat(v)||0)}return 0}throw 0}const result=pT();return isFinite(result)?result:""}catch{return ""}}
 
@@ -28,7 +34,7 @@ function calcWithFormulas(inp,formulas){
   return results;
 }
 
-// ─── 3. FACTORIES & DEFAULTS ───────────────────────────────────────────
+// ─── 4. FACTORIES & DEFAULTS ───────────────────────────────────────────
 const mkTruck = (ov={}) => ({ id: uid(), truckName:"XCMG XGE150 Plus 10YMP", payload:85, powerSource:"Battery - Charge", batterySize:828, economicLife:80000, tkphLimit:254.2, availability:0.86, useOfAvailability:0.96, operatingEfficiency:0.79, utToSmuConversion:1.06, spotTimeLoad:0.46, queueTimeLoad:0, spotTimeDump:0.5, queueTimeDump:0, dumpTime:0.5, performanceEfficiency:0.99, totalTruckCapex:2185181.43, capexPerSmuHour:27.31, powerSystemCost:383890, opexPerSmuHour:156.54, operatorRate:133, nominalBatteryCapacityNew:828, averageBatteryUsableCapacity:563.04, travelToRechargeEnergy:10, travelToSwapChargerStationTime:2.96, chargerQueueTime:0, chargerConnectionPositioningTime:0, equivalentFullLifeCycles:4500, chargingTime:50, rechargeRateC:1.2, swapTotalSwapTime:14.5, chargerOperatingTime:6740.82, demandResponseAllowance:0, numBatteriesPerStation:1, totalChargerCapex:4703194.09, avgChargerEffectiveHours:6740.82, totalChargerOandO:70.19, ...ov });
 const mkTruckL = () => mkTruck({ truckName:"Liebherr BET264 10ymp", payload:240, batterySize:2580, economicLife:84000, tkphLimit:1400, availability:0.88, useOfAvailability:0.936, operatingEfficiency:0.803, spotTimeLoad:0.46, queueTimeLoad:0, spotTimeDump:0.5, queueTimeDump:0, dumpTime:1.0, totalTruckCapex:11198255.71, capexPerSmuHour:133.31, powerSystemCost:2313980, opexPerSmuHour:478.80, nominalBatteryCapacityNew:2580, averageBatteryUsableCapacity:2037.5, travelToRechargeEnergy:17.4, equivalentFullLifeCycles:5950, chargingTime:33.18, rechargeRateC:2.0, totalChargerCapex:9722830, totalChargerOandO:143.25 });
 const mkDigger = (ov={}) => ({ id: uid(), diggerName:"300t Cable Electric Backhoe", powerSource:"Cable Electric", availability:0.90, useOfAvailability:0.83, operatingEfficiency:0.38, utToSmuConversion:1.03, equipmentLife:80000, effectiveTime:2487, effectiveDigRate:2800, totalCapex:8995710, capexPerSmuHour:112.45, dieselElectricityCost:86.6, maintenanceLabour:91, oilAndCoolant:12.6, partsComponentsPM05:223, materialsConsumables:0, get:76.5, cableCost:2.4, tracks:0, tires:0, fmsLicenseFee:42.99, batteryReplacement:0, operatorCost:130, rehandleCostPerTonne:1.13, ...ov });
@@ -152,7 +158,7 @@ const defaultFormulas = () => [
   {key:"totPerT",label:"Total $/t",unit:"$/t",group:"Inc Capex",formula:"totCost / totalRampMined",hl:1,cur:1},
 ];
 
-// ─── 4. UI COMPONENTS ──────────────────────────────────────────────────
+// ─── 5. UI COMPONENTS ──────────────────────────────────────────────────
 const ST=({children,icon})=>(<div style={{display:"flex",alignItems:"center",gap:10,padding:"14px 0 10px",marginTop:20,borderBottom:`2px solid ${P.pri}`,marginBottom:14}}><span style={{fontSize:18}}>{icon}</span><span style={{color:P.pri,fontWeight:700,fontSize:15,fontFamily:ff}}>{children}</span></div>);
 const Btn=({children,onClick,color=P.pri,small,solid})=>(<button onClick={onClick} style={{padding:small?"5px 12px":"8px 20px",background:solid?color:"transparent",border:`1.5px solid ${color}`,borderRadius:7,color:solid?"#fff":color,fontFamily:ff,fontSize:12,cursor:"pointer",fontWeight:600}}>{children}</button>);
 const cardS={background:P.card,borderRadius:10,border:`1px solid ${P.bd}`,boxShadow:"0 1px 4px rgba(0,0,0,0.05)"};
@@ -167,7 +173,7 @@ const CompRow=({label,field,models,onChange,unit,type="number",step,section})=>{
 const truckRows=[{section:true,label:"Identity & TUM"},{field:"truckName",label:"Truck Name",type:"text"},{field:"payload",label:"Payload",unit:"t"},{field:"powerSource",label:"Power Source",type:"text"},{field:"availability",label:"Availability",unit:"%",step:0.01},{field:"useOfAvailability",label:"Use of Availability",unit:"%",step:0.01},{field:"operatingEfficiency",label:"Operating Efficiency",unit:"%",step:0.01},{field:"utToSmuConversion",label:"UT → SMU",unit:"#"},{field:"performanceEfficiency",label:"Perf Efficiency",unit:"%",step:0.01},{section:true,label:"Spot / Queue / Dump Times"},{field:"spotTimeLoad",label:"Spot Time at Load",unit:"min"},{field:"queueTimeLoad",label:"Queue Time at Load",unit:"min"},{field:"spotTimeDump",label:"Spot Time at Dump",unit:"min"},{field:"queueTimeDump",label:"Queue Time at Dump",unit:"min"},{field:"dumpTime",label:"Dump Time",unit:"min"},{section:true,label:"Capital Expenditure"},{field:"totalTruckCapex",label:"Total Capex",unit:"AUD",step:1000},{field:"capexPerSmuHour",label:"Capex/SMU Hr",unit:"$/SMU"},{field:"powerSystemCost",label:"Power System",unit:"AUD",step:1000},{section:true,label:"Operating Expenditure"},{field:"opexPerSmuHour",label:"Opex/SMU Hr",unit:"$/hr"},{field:"operatorRate",label:"Operator Rate",unit:"$/SMU"},{section:true,label:"Charging"},{field:"nominalBatteryCapacityNew",label:"Nom Battery Cap",unit:"kWh"},{field:"averageBatteryUsableCapacity",label:"Avg Usable Cap",unit:"kWh"},{field:"travelToRechargeEnergy",label:"Travel Rchg Energy",unit:"kWh"},{field:"travelToSwapChargerStationTime",label:"Travel to Charger",unit:"min"},{field:"chargerQueueTime",label:"Queue Time",unit:"min"},{field:"chargerConnectionPositioningTime",label:"Connection Time",unit:"min"},{field:"equivalentFullLifeCycles",label:"Equiv Life Cycles",unit:"#"},{field:"chargingTime",label:"Charging Time",unit:"min"},{field:"rechargeRateC",label:"Recharge Rate",unit:"C"},{section:true,label:"Charger Infrastructure"},{field:"chargerOperatingTime",label:"Charger Op Time",unit:"hrs"},{field:"demandResponseAllowance",label:"Demand Resp %",unit:"%",step:0.01},{field:"numBatteriesPerStation",label:"Batteries/Station",unit:"#"},{field:"totalChargerCapex",label:"Charger Capex",unit:"AUD",step:1000},{field:"avgChargerEffectiveHours",label:"Avg Charger Eff Hrs",unit:"hrs"},{field:"totalChargerOandO",label:"Charger O&O",unit:"$/SMU"}];
 const diggerRows=[{section:true,label:"Identity & TUM"},{field:"diggerName",label:"Digger Name",type:"text"},{field:"powerSource",label:"Power Source",type:"text"},{field:"effectiveDigRate",label:"Eff Dig Rate",unit:"t/hr",step:100},{field:"availability",label:"Availability",unit:"%",step:0.01},{field:"useOfAvailability",label:"Use of Availability",unit:"%",step:0.01},{field:"operatingEfficiency",label:"Op Efficiency",unit:"%",step:0.01},{field:"utToSmuConversion",label:"UT → SMU",unit:"#"},{field:"equipmentLife",label:"Equip Life",unit:"hrs"},{field:"effectiveTime",label:"Eff Time",unit:"hrs"},{section:true,label:"Capital Expenditure"},{field:"totalCapex",label:"Total Capex",unit:"AUD",step:10000},{field:"capexPerSmuHour",label:"Capex/SMU",unit:"$/SMU"},{section:true,label:"Operating Expenditure (per SMU)"},{field:"dieselElectricityCost",label:"Diesel/Elec",unit:"$/SMU"},{field:"maintenanceLabour",label:"Maint Labour",unit:"$/SMU"},{field:"oilAndCoolant",label:"Oil & Coolant",unit:"$/SMU"},{field:"partsComponentsPM05",label:"Parts PM05",unit:"$/SMU"},{field:"materialsConsumables",label:"Materials",unit:"$/SMU"},{field:"get",label:"GET",unit:"$/SMU"},{field:"cableCost",label:"Cable Cost",unit:"$/SMU"},{field:"tracks",label:"Tracks",unit:"$/SMU"},{field:"tires",label:"Tires",unit:"$/SMU"},{field:"fmsLicenseFee",label:"FMS License",unit:"$/SMU"},{field:"batteryReplacement",label:"Battery Repl",unit:"$/SMU"},{field:"operatorCost",label:"Operator",unit:"$/SMU"},{field:"rehandleCostPerTonne",label:"Rehandle $/t",unit:"$/t"}];
 
-// ─── 5. MAIN APP COMPONENT ─────────────────────────────────────────────
+// ─── 6. APP COMPONENT ──────────────────────────────────────────────────
 export default function App(){
   const [page,setPage]=useState("scenarios");
   const [trucks,setTrucks]=useState(()=>[mkTruck(),mkTruckL()]);
@@ -184,7 +190,8 @@ export default function App(){
 
   const results=useMemo(()=>{
     const all=[];
-    for(let pi=0;pi< (scn.csvData?scn.csvData.np:scn.manualData.length);pi++){
+    const currentPeriods = scn.csvData ? scn.csvData.np : scn.manualData.length;
+    for(let pi=0;pi< currentPeriods;pi++){
       for(const fleet of activeFleets){
         const pd= (scn.csvData ? {periodLabel:scn.csvData.gs("Period",pi)||`P${pi+1}`, totalMined:scn.csvData.gv("Total Mined",pi)} : scn.manualData[pi]);
         if(!pd)continue;
@@ -194,7 +201,7 @@ export default function App(){
       }
     }
     return all;
-  },[activeFleets,trucks,diggers,otherA,formulas,scn]);
+  }, [activeFleets, trucks, diggers, otherA, formulas, scn]);
 
   const totals=useMemo(()=>{const t={m:0,c:0};results.forEach(r=>{if(!r.res)return;t.m+=(r.pd?.totalMined||0)*scn.unitMul;t.c+=r.res.totCost||0});t.cpt=t.m>0?t.c/t.m:0;return t},[results,scn.unitMul]);
 
@@ -240,18 +247,6 @@ export default function App(){
                 <input type="text" value={s.name} onChange={e=>setScenarios(p=>{const n=[...p];n[si]={...n[si],name:e.target.value};return n})} style={{padding:"6px 10px",background:P.input,border:`1px solid ${P.bd}`,borderRadius:6,color:P.pri,fontFamily:ff,fontSize:16,fontWeight:700,width:200}}/>
                 <div style={{display:"flex",gap:8,marginTop:12}}><Btn onClick={()=>setActiveScnIdx(si)} solid={si===activeScnIdx} color={si===activeScnIdx?P.pri:P.txD} small>{si===activeScnIdx?"Active":"Select"}</Btn></div>
               </div>))}</div>
-        </div>)}
-        {page==="truck"&&(<div><ST icon="🚛">Truck Models</ST>
-          <div style={{...cardS,overflowX:"auto"}}><table style={{borderCollapse:"collapse",width:"100%"}}>
-            <thead><tr style={{background:P.secBg}}><th style={thS}>Parameter</th><th style={thS}>Unit</th>{trucks.map((t,i)=>(<th key={i} style={thS}>Model {i+1}</th>))}</tr></thead>
-            <tbody>{truckRows.map((r,i)=><CompRow key={i} {...r} models={trucks} onChange={updT}/>)}</tbody>
-          </table></div>
-        </div>)}
-        {page==="digger"&&(<div><ST icon="⛏️">Digger Models</ST>
-          <div style={{...cardS,overflowX:"auto"}}><table style={{borderCollapse:"collapse",width:"100%"}}>
-            <thead><tr style={{background:P.secBg}}><th style={thS}>Parameter</th><th style={thS}>Unit</th>{diggers.map((d,i)=>(<th key={i} style={thS}>Model {i+1}</th>))}</tr></thead>
-            <tbody>{diggerRows.map((r,i)=><CompRow key={i} {...r} models={diggers} onChange={updD}/>)}</tbody>
-          </table></div>
         </div>)}
       </div>
     </div>
